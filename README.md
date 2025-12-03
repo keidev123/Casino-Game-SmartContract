@@ -30,7 +30,7 @@ If some have any question, contact here: [Twitter](https://x.com/blacksky_jose) 
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/L9T-Development/gamefi-jackpot-smart-contract
+git clone https://github.com/devcarron/casino-game-smartContract
 cd gamefi-jackpot-smart-contract
 ```
 
