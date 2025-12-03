@@ -4,7 +4,7 @@ Casino Game Smart Contract: A decentralized casino(Jackpot) smart contract built
 
 ## Contact
 
-If some have any question, contact here: [Telegram](https://t.me/shiny0103) | [Twitter](https://x.com/0xTan1319)
+If some have any question, contact here: [Twitter](https://x.com/blacksky_jose) | [Telegram](https://t.me/blacksky_jose) | [Discord](https://discord.gg/blacksky_jose)
 
 ## Contract Address 
 
