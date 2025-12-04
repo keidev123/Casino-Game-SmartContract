@@ -44,7 +44,7 @@ yarn install
 anchor build
 ```
 
-## Configuration
+## Configuration.
 
 The project is configured to use Solana's devnet by default. The configuration can be found in `Anchor.toml`. Make sure to:
 
