@@ -7,27 +7,26 @@ use anchor_lang::{
 
 use orao_solana_vrf::state::RandomnessAccountData;
 
+/// Deserialize randomness account data from account info
 pub fn get_account_data(account_info: &AccountInfo) -> Result<RandomnessAccountData, ProgramError> {
     if account_info.data_is_empty() {
         return Err(ProgramError::UninitializedAccount);
     }
 
-    let account = RandomnessAccountData::try_deserialize(&mut &account_info.data.borrow()[..])?;
-
-    if false {
-        Err(ProgramError::UninitializedAccount)
-    } else {
-        Ok(account)
-    }
+    RandomnessAccountData::try_deserialize(&mut &account_info.data.borrow()[..])
+        .map_err(|_| ProgramError::InvalidAccountData)
 }
 
-/// Derives last round outcome.
+/// Extracts the current fulfilled randomness value as u64
+/// Returns 0 if randomness is not yet fulfilled
 pub fn current_state(randomness: &RandomnessAccountData) -> u64 {
-    if let Some(randomness) = randomness.fulfilled_randomness() {
-        let value = randomness[0..size_of::<u64>()].try_into().unwrap();
-
-        return u64::from_le_bytes(value);
-    } else {
-        return 0;
+    if let Some(fulfilled_randomness) = randomness.fulfilled_randomness() {
+        if fulfilled_randomness.len() >= size_of::<u64>() {
+            let value: [u8; 8] = fulfilled_randomness[0..size_of::<u64>()]
+                .try_into()
+                .unwrap_or([0u8; 8]);
+            return u64::from_le_bytes(value);
+        }
     }
+    0
 }

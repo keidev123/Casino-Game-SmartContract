@@ -26,7 +26,9 @@ pub struct GameGround {
 }
 
 impl GameGround {
-    pub const INIT_SPACE: usize = 32 + // creator
+    /// Base space required for GameGround account (discriminator + fixed fields)
+    pub const INIT_SPACE: usize = 8 +  // discriminator
+        32 + // creator
         8 +  // game_round
         8 +  // create_date
         8 +  // start_date
@@ -41,10 +43,12 @@ impl GameGround {
         32 + // force [u8; 32]
         1 +  // is_completed (bool)
         1 +  // is_claimed (bool)
-        (24 + 40); // Vec length prefix (for deposit_list)
+        4;   // Vec length prefix (u32 = 4 bytes)
 
+    /// Calculate total space needed for GameGround with `len` deposit entries
+    /// Each DepositInfo is 32 bytes (Pubkey) + 8 bytes (u64) = 40 bytes
     pub fn space(len: usize) -> usize {
-        8 + Self::INIT_SPACE + len * (32 + 8)
+        Self::INIT_SPACE + len * DepositInfo::INIT_SPACE
     }
 }
 
@@ -79,17 +83,39 @@ impl<'info> GameGroundAccount<'info> for Account<'info, GameGround> {
     }
 
     fn set_winner(&mut self, random_num: u64) -> Result<()> {
+        use crate::errors::*;
+        
+        require!(
+            self.total_deposit > 0,
+            ContractError::InvalidAmount
+        );
+        
+        require!(
+            !self.deposit_list.is_empty(),
+            ContractError::InvalidAmount
+        );
+
         self.rand = random_num;
+        
+        // Use weighted random selection based on deposit amounts
+        // This ensures fair distribution proportional to each user's deposit
         let mut remaining = self.rand % self.total_deposit;
 
         for deposit in &self.deposit_list {
-            if remaining > deposit.amount {
+            if remaining >= deposit.amount {
                 remaining -= deposit.amount;
             } else {
                 self.winner = deposit.user;
-                msg!("winner: {:?}", self.winner);
-                break;
+                msg!("Winner selected: {:?} with deposit: {} lamports", self.winner, deposit.amount);
+                return Ok(());
             }
+        }
+
+        // Fallback: if somehow we didn't select a winner, choose the last depositor
+        // This should never happen with correct logic, but provides safety
+        if let Some(last_deposit) = self.deposit_list.last() {
+            self.winner = last_deposit.user;
+            msg!("Fallback winner selected: {:?}", self.winner);
         }
 
         Ok(())

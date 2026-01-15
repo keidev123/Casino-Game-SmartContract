@@ -24,15 +24,15 @@ import {
 } from "../lib/constant";
 
 
-let solConnection: Connection = null;
-let program: Program<JackpotSmartContract> = null;
-let payer: NodeWallet = null;
-let provider: anchor.Provider = null;
-let feePayer: NodeWallet = null;
-let feePayerWalletKeypair: Keypair = null;
-let teamWallet: PublicKey = null;
-// Address of the deployed program.
-let programId;
+// Global state for CLI operations
+let solConnection: Connection | null = null;
+let program: Program<JackpotSmartContract> | null = null;
+let payer: NodeWallet | null = null;
+let provider: anchor.Provider | null = null;
+let feePayer: NodeWallet | null = null;
+let feePayerWalletKeypair: Keypair | null = null;
+let teamWallet: PublicKey | null = null;
+let programId: string | undefined;
 
 /**
  * Set cluster, provider, program
@@ -84,31 +84,37 @@ export const setClusterConfig = async (
 };
 
 export const configProject = async () => {
-    console.log("configProject start");
+    if (!program || !payer || !solConnection || !teamWallet) {
+        throw new Error("Cluster configuration not initialized. Run setClusterConfig first.");
+    }
+
+    console.log("Configuring project...");
     const authority = new PublicKey("H7YMxhKgLw2NDM9WQnpcUefPvCaLJCCYYaq1ETLHXJuH");
     const payerWallet = new PublicKey("H7YMxhKgLw2NDM9WQnpcUefPvCaLJCCYYaq1ETLHXJuH");
 
-    const [configPda, _] = PublicKey.findProgramAddressSync(
+    const [configPda] = PublicKey.findProgramAddressSync(
         [Buffer.from(SEED_CONFIG)],
         program.programId
     );
-    console.log("🚀 ~ configProject ~ configPda:", configPda)
+    console.log("Config PDA:", configPda.toBase58());
 
-    const configAccount = await program.account.config.fetch(configPda);
-    console.log("configPda", configAccount);
+    let configAccount;
+    try {
+        configAccount = await program.account.config.fetch(configPda);
+        console.log("Existing config:", configAccount);
+    } catch (error) {
+        console.log("Config account not found, will initialize new config");
+        configAccount = { gameRound: new BN(0) };
+    }
 
-    // Create a dummy config object to pass as argument.
     const newConfig = {
-        authority: authority,//payer.publicKey,
-
-        payerWallet: payerWallet, //payer.publicKey,
-        teamWallet: teamWallet, //payer.publicKey,
-
-        gameRound: configAccount.gameRound,
-        platformFee: new BN(TEST_INITIAL_PLATFORM_FEE), // Example fee: 1%
-        minDepositAmount: new BN(TEST_INITIAL_MIN_DEPOSIT_AMOUNT), //Example 0.1SOL
-        maxJoinerCount: new BN(TEST_INITIAL_MAX_JOINER_COUNT), //Example 100
-
+        authority,
+        payerWallet,
+        teamWallet,
+        gameRound: configAccount.gameRound || new BN(0),
+        platformFee: new BN(TEST_INITIAL_PLATFORM_FEE), // 1% platform fee (100 basis points)
+        minDepositAmount: new BN(TEST_INITIAL_MIN_DEPOSIT_AMOUNT), // 0.1 SOL minimum
+        maxJoinerCount: new BN(TEST_INITIAL_MAX_JOINER_COUNT), // 100 max joiners
         initialized: false,
     };
 
@@ -120,89 +126,98 @@ export const configProject = async () => {
     );
 
     await execTx(tx, solConnection, payer);
+    console.log("Project configuration completed successfully");
 };
 
 export const createGame = async (
     roundTime: number,
     minDepositAmount: number,
-    maxJoinerCount: number) => {
+    maxJoinerCount: number
+) => {
+    if (!program || !payer || !solConnection || !feePayerWalletKeypair) {
+        throw new Error("Cluster configuration not initialized. Run setClusterConfig first.");
+    }
+
     const configPda = PublicKey.findProgramAddressSync(
         [Buffer.from(SEED_CONFIG)],
         program.programId
     )[0];
+    
     const configAccount = await program.account.config.fetch(configPda);
+    console.log("Current game round:", configAccount.gameRound.toString());
 
     const tx = await createGameTx(
-
         payer.publicKey,
         feePayerWalletKeypair,
-
         roundTime,
         minDepositAmount,
         maxJoinerCount,
-
         solConnection,
         program
     );
 
     await execTx(tx, solConnection, payer);
+    console.log("Game created successfully");
 };
 
 export const setWinner = async (roundNum: number) => {
+    if (!program || !payer || !solConnection) {
+        throw new Error("Cluster configuration not initialized. Run setClusterConfig first.");
+    }
+
     const tx = await setWinnerTx(
         payer.publicKey,
-
         roundNum,
-
         solConnection,
         program
     );
 
     await execTx(tx, solConnection, payer);
 
-    const [gameGroundPda, bump] = PublicKey.findProgramAddressSync(
+    const [gameGroundPda] = PublicKey.findProgramAddressSync(
         [Buffer.from(GAME_GROUND), new BN(roundNum).toArrayLike(Buffer, "le", 8)],
         program.programId
     );
-    console.log("gameGroundPda: ", gameGroundPda);
+    console.log("Game Ground PDA:", gameGroundPda.toBase58());
 
     const gameGroundAccount = await program.account.gameGround.fetch(gameGroundPda);
-    console.log("winner: ", gameGroundAccount.winner);
+    console.log("Winner:", gameGroundAccount.winner.toBase58());
+    console.log("Total deposit:", gameGroundAccount.totalDeposit.toString());
+    console.log("Random number:", gameGroundAccount.rand.toString());
 };
 
 export const claimReward = async (roundNum: number) => {
+    if (!program || !payer || !solConnection || !feePayerWalletKeypair) {
+        throw new Error("Cluster configuration not initialized. Run setClusterConfig first.");
+    }
+
     const tx = await claimRewardTx(
         payer.publicKey,
         feePayerWalletKeypair,
-
         roundNum,
-
         solConnection,
         program
     );
 
     await execTx(tx, solConnection, payer);
-
-
+    console.log("Reward claimed successfully for round", roundNum);
 };
 
-export const joinGame = async (roundNum: number, amount: number,) => {
+export const joinGame = async (roundNum: number, amount: number) => {
+    if (!program || !payer || !solConnection || !feePayerWalletKeypair || !teamWallet) {
+        throw new Error("Cluster configuration not initialized. Run setClusterConfig first.");
+    }
+
     const tx = await joinGameTx(
         payer.publicKey,
         feePayerWalletKeypair,
         teamWallet,
-
         roundNum,
         amount,
-
         solConnection,
         program
     );
 
     await execTx(tx, solConnection, payer);
-};
-
-
-function sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-} 
+    console.log(`Successfully joined game round ${roundNum} with ${amount} lamports`);
+}; 

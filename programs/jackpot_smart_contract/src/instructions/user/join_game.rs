@@ -50,6 +50,24 @@ pub struct JoinGame<'info> {
 }
 
 impl<'info> JoinGame<'info> {
+    /// Handles player joining a game round
+    ///
+    /// This function:
+    /// 1. Validates deposit amount and game state
+    /// 2. Calculates and transfers platform fee to team wallet
+    /// 3. Transfers remaining deposit to global vault
+    /// 4. Resizes game account if needed for new participant
+    /// 5. Updates game state (starts timer when 2nd player joins)
+    ///
+    /// # Arguments
+    /// * `round_num` - The round number to join
+    /// * `amount` - Total deposit amount in lamports
+    ///
+    /// # Returns
+    /// * `Result<()>` - Success if all validations pass and transfers succeed
+    ///
+    /// # Note
+    /// Platform fee is deducted from the deposit amount before adding to vault
     pub fn handler(&mut self, round_num: u64, amount: u64) -> Result<()> {
         if amount <= 0 {
             return err!(ContractError::InvalidAmount);
@@ -68,14 +86,15 @@ impl<'info> JoinGame<'info> {
 
         let timestamp = Clock::get()?.unix_timestamp;
 
-        if game_ground.user_count > 2 {
+        // Check if game has started (after 2 players joined)
+        if game_ground.user_count >= 2 {
             require!(
                 game_ground.end_date > timestamp,
                 ContractError::GameAlreadyCompleted
             );
 
             require!(
-                game_ground.is_completed == false,
+                !game_ground.is_completed,
                 ContractError::GameAlreadyCompleted
             );
         }
@@ -84,23 +103,45 @@ impl<'info> JoinGame<'info> {
         let team_wallet = &mut self.team_wallet;
         let source = &mut self.global_vault.to_account_info();
 
-        let depoist_amount_applied: u64;
-        let platform_fee_lamports = bps_mul(global_config.platform_fee, amount, 10_000).unwrap();
-
-        depoist_amount_applied = amount
+        // Calculate platform fee and deposit amount
+        let platform_fee_lamports = bps_mul(global_config.platform_fee, amount, 10_000)
+            .ok_or(ContractError::ArithmeticError)?;
+        
+        let deposit_amount_applied = amount
             .checked_sub(platform_fee_lamports)
             .ok_or(ContractError::InvalidAmount)?;
 
-        // transfer sol to market
+        require!(
+            deposit_amount_applied > 0,
+            ContractError::InvalidAmount
+        );
+
+        // Check if user already exists to determine if we need to resize
+        let user_exists = game_ground.deposit_list.iter().any(|d| d.user == self.joiner.key());
+        let new_list_len = if user_exists {
+            game_ground.deposit_list.len()
+        } else {
+            game_ground.deposit_list.len() + 1
+        };
+
+        // Resize account before appending to accommodate new entry
+        resize_account(
+            game_ground.to_account_info().clone(),
+            GameGround::space(new_list_len),
+            self.payer.to_account_info().clone(),
+            self.system_program.to_account_info().clone(),
+        )?;
+
+        // Transfer SOL to global vault (deposit amount after fee)
         sol_transfer_from_user(
             &self.joiner,
             source.clone(),
             &self.system_program,
-            depoist_amount_applied,
+            deposit_amount_applied,
         )?;
 
+        // Transfer platform fee to team wallet
         if platform_fee_lamports > 0 {
-            //Transfer SOL to team_wallet
             sol_transfer_from_user(
                 &self.joiner,
                 team_wallet.clone(),
@@ -109,14 +150,8 @@ impl<'info> JoinGame<'info> {
             )?;
         }
 
-        resize_account(
-            game_ground.to_account_info().clone(),
-            GameGround::space(game_ground.deposit_list.len() as usize),
-            self.payer.to_account_info().clone(),
-            self.system_program.to_account_info().clone(),
-        )?;
-
-        game_ground.append(self.joiner.key(), depoist_amount_applied);
+        // Append deposit after transfers are successful
+        game_ground.append(self.joiner.key(), deposit_amount_applied);
 
         if game_ground.user_count == 2 {
             game_ground.start_date = timestamp;

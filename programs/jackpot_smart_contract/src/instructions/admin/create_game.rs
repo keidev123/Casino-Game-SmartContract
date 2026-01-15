@@ -40,7 +40,7 @@ pub struct CreateGame<'info> {
     #[account(
         init,
         payer = payer,
-        space = 8 + GameGround::INIT_SPACE,
+        space = GameGround::INIT_SPACE,
         seeds = [GAME_GROUND.as_bytes(), global_config.game_round.to_le_bytes().as_ref()],
         bump
     )]
@@ -73,6 +73,22 @@ pub struct CreateGame<'info> {
 }
 
 impl<'info> CreateGame<'info> {
+    /// Handles game creation logic
+    ///
+    /// This function:
+    /// 1. Validates round parameters against global config
+    /// 2. Requests randomness from ORAO VRF network
+    /// 3. Initializes the game ground account with default values
+    /// 4. Increments the global game round counter
+    ///
+    /// # Arguments
+    /// * `force` - Random seed for VRF request (typically from Keypair::generate())
+    /// * `round_time` - Duration in seconds before round auto-completes
+    /// * `min_deposit_amount` - Minimum SOL required to join (must be >= global min)
+    /// * `max_joiner_count` - Maximum participants (must be <= global max)
+    ///
+    /// # Returns
+    /// * `Result<()>` - Success if all validations pass and VRF request succeeds
     pub fn handler(
         &mut self,
         force: [u8; 32],
@@ -112,14 +128,19 @@ impl<'info> CreateGame<'info> {
         game_ground.creator = self.creator.key();
         game_ground.game_round = global_config.game_round;
         game_ground.create_date = timestamp;
+        game_ground.start_date = 0; // Will be set when first 2 players join
+        game_ground.end_date = 0; // Will be set when first 2 players join
         game_ground.round_time = round_time;
         game_ground.total_deposit = 0;
+        game_ground.rand = 0;
+        game_ground.winner = Pubkey::default();
         game_ground.user_count = 0;
         game_ground.min_deposit_amount = min_deposit_amount;
         game_ground.max_joiner_count = max_joiner_count;
+        game_ground.force = force;
         game_ground.is_completed = false;
         game_ground.is_claimed = false;
-        game_ground.force = force;
+        game_ground.deposit_list = Vec::new();
 
         Ok(())
     }

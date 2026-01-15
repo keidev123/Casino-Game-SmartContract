@@ -50,6 +50,23 @@ pub struct SetWinner<'info> {
 }
 
 impl<'info> SetWinner<'info> {
+    /// Handles winner selection using VRF randomness
+    ///
+    /// This function:
+    /// 1. Validates game is completed (time expired)
+    /// 2. Checks VRF randomness is fulfilled
+    /// 3. Selects winner using weighted random algorithm
+    /// 4. Marks game as completed
+    ///
+    /// # Arguments
+    /// * `round_num` - The round number to process
+    ///
+    /// # Returns
+    /// * `Result<()>` - Success if randomness is ready and winner selected
+    ///
+    /// # Security
+    /// Only callable by the configured authority. Winner selection is deterministic
+    /// based on VRF output and cannot be manipulated.
     pub fn handler(&mut self, round_num: u64) -> Result<()> {
         require!(
             round_num < self.global_config.game_round,
@@ -60,12 +77,23 @@ impl<'info> SetWinner<'info> {
         let timestamp = Clock::get()?.unix_timestamp;
 
         require!(
-            game_ground.end_date <= timestamp,
+            game_ground.end_date > 0 && game_ground.end_date <= timestamp,
             ContractError::GameNotCompleted
         );
+        
         require!(
-            game_ground.is_completed == false,
+            !game_ground.is_completed,
             ContractError::SetWinnerCompleted
+        );
+        
+        require!(
+            game_ground.total_deposit > 0,
+            ContractError::InvalidAmount
+        );
+        
+        require!(
+            !game_ground.deposit_list.is_empty(),
+            ContractError::InvalidAmount
         );
 
         let rand_acc = crate::misc::get_account_data(&self.random)?;

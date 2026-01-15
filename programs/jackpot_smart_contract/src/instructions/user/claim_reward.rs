@@ -44,6 +44,23 @@ pub struct ClaimReward<'info> {
 }
 
 impl<'info> ClaimReward<'info> {
+    /// Handles reward claiming by the winner
+    ///
+    /// This function:
+    /// 1. Validates caller is the selected winner
+    /// 2. Validates game is completed and not yet claimed
+    /// 3. Transfers total deposit from global vault to winner
+    /// 4. Marks reward as claimed
+    ///
+    /// # Arguments
+    /// * `round_num` - The round number to claim
+    /// * `global_vault_bump` - Bump seed for global vault PDA
+    ///
+    /// # Returns
+    /// * `Result<()>` - Success if all validations pass and transfer succeeds
+    ///
+    /// # Note
+    /// Winner receives the full total_deposit amount (fees already deducted on join)
     pub fn handler(&mut self, round_num: u64, global_vault_bump: u8) -> Result<()> {
         require!(
             round_num < self.global_config.game_round,
@@ -53,13 +70,23 @@ impl<'info> ClaimReward<'info> {
         let game_ground = &mut self.game_ground;
 
         require!(
-            game_ground.is_claimed == false,
+            !game_ground.is_claimed,
             ContractError::WinnerClaimed
         );
 
         require!(
-            game_ground.is_completed == true,
+            game_ground.is_completed,
             ContractError::GameNotCompleted
+        );
+        
+        require!(
+            game_ground.winner == self.winner.key(),
+            ContractError::IncorrectAuthority
+        );
+        
+        require!(
+            game_ground.total_deposit > 0,
+            ContractError::InvalidAmount
         );
 
         let signer_seeds: &[&[&[u8]]] = &[&[GLOBAL.as_bytes(), &[global_vault_bump]]];
