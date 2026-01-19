@@ -52,18 +52,18 @@ This smart contract implements a decentralized jackpot system where players can 
 │                    Casino Jackpot System                    │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ┌──────────────┐      ┌──────────────┐      ┌──────────┐ │
-│  │   Config     │      │  GameGround  │      │  Global  │ │
-│  │   Account    │◄────►│   Account    │◄────►│  Vault   │ │
-│  │              │      │              │      │          │ │
-│  └──────────────┘      └──────────────┘      └──────────┘ │
-│         │                      │                           │
-│         │                      │                           │
-│         ▼                      ▼                           │
-│  ┌──────────────────────────────────────────────┐          │
-│  │         ORAO Network VRF Integration         │          │
-│  │    (Verifiable Random Function Provider)     │          │
-│  └──────────────────────────────────────────────┘          │
+│  ┌──────────────┐      ┌──────────────┐      ┌──────────┐   │
+│  │   Config     │      │  GameGround  │      │  Global  │   │
+│  │   Account    │◄────►│   Account    │◄────►│  Vault   │   │
+│  │              │      │              │      │          │   │
+│  └──────────────┘      └──────────────┘      └──────────┘   │
+│         │                      │                            │
+│         │                      │                            │
+│         ▼                      ▼                            │
+│  ┌──────────────────────────────────────────────┐           │
+│  │         ORAO Network VRF Integration         │           │
+│  │    (Verifiable Random Function Provider)     │           │
+│  └──────────────────────────────────────────────┘           │
 │                                                             │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -535,5 +535,3 @@ For questions, support, or collaboration opportunities:
 - [Solana Foundation](https://solana.org/) - Blockchain infrastructure
 
 ---
-
-**Built with ❤️ for the Solana ecosystem**
